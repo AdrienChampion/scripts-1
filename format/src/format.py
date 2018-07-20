@@ -9,7 +9,7 @@ import fix
 
 
 def parse_with_z3(
-    file, out_dir, check_only, split_queries, simplify, skip_err, datalog
+    file, out_dir, check_only, split_queries, simplify, skip_err, datalog, sync
 ):
     if check_only:
         assertions = z3.parse_smt2_file(file)
@@ -27,7 +27,10 @@ def parse_with_z3(
 
     # Check if the file is actually in datalog.
     engine = z3.Fixedpoint()
+
     engine.set(
+        "fixedpoint.datalog.synchronization",
+        sync,
         "xform.inline_eager",
         simplify,
         "xform.inline_linear",
@@ -36,13 +39,12 @@ def parse_with_z3(
         simplify,
         "xform.coi",
         simplify,
-        "xform.compress_unbound",
-        simplify,
         "xform.subsumption_checker",
         simplify,
         "xform.tail_simplifier_pve",
         simplify
     )
+
     try:
         queries = engine.parse_file(file)
     except z3.Z3Exception as e:
@@ -56,7 +58,8 @@ def parse_with_z3(
 
     # engine.get_assertions()
     goals = z3.Goal()
-    goals.add(assertions)
+    for a in assertions:
+        goals.add(a)
 
     non_lin = z3.Probe('arith-max-deg')
     if non_lin(goals) > 1:
@@ -64,10 +67,11 @@ def parse_with_z3(
             'found non-linear expressions'
         )
 
-    # if simplify:
     tactic = z3.Tactic("horn-simplify")
     simplified = tactic(
         goals,
+        "fixedpoint.datalog.synchronization",
+        sync,
         "xform.inline_eager",
         simplify,
         "xform.inline_linear",
@@ -76,16 +80,12 @@ def parse_with_z3(
         simplify,
         "xform.coi",
         simplify,
-        "xform.compress_unbound",
-        simplify,
         "xform.subsumption_checker",
         simplify,
         "xform.tail_simplifier_pve",
         simplify
     )
 
-    # else:
-    #     simplified = [goals]
     clauses = []
     queries = []
     if len(simplified) == 0:
@@ -196,6 +196,13 @@ if __name__ == "__main__":
         help='Activates z3\'s simplifications (ignored by check).',
     )
     parser.add_argument(
+        '--sync',
+        dest="sync",
+        metavar='True/False',
+        default="False",
+        help='Activates clause synchronization'
+    )
+    parser.add_argument(
         '--skip_errors',
         dest='skip_err',
         metavar='True/False',
@@ -234,6 +241,7 @@ if __name__ == "__main__":
 
     args.simplify = check_bool_clap(args.simplify, "simplify")
     args.check = check_bool_clap(args.check, "check")
+    args.sync = check_bool_clap(args.sync, "sync")
     args.skip_err = check_bool_clap(args.skip_err, "skip_err")
     args.datalog = check_bool_clap(args.datalog, "datalog")
     args.split_queries = check_bool_clap(args.split_queries, "split_queries")
@@ -242,7 +250,7 @@ if __name__ == "__main__":
         try:
             parse_with_z3(
                 file, args.out_dir, args.check, args.split_queries,
-                args.simplify, args.skip_err, args.datalog
+                args.simplify, args.skip_err, args.datalog, args.sync
             )
         except Exc as e:
             eprint('Error on file {}'.format(file))
