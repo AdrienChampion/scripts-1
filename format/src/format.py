@@ -220,7 +220,7 @@ if __name__ == "__main__":
         '--split_queries',
         dest='split_queries',
         metavar='True/False',
-        default='True',
+        default='False',
         help='Split the queries to generate separate benchmarks.'
     )
     parser.add_argument(
